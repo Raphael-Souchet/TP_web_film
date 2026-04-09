@@ -1,134 +1,75 @@
-const API_KEY = '72c35ea3313374128a26f3528c1b14ec';
+class MovieApp {
+    constructor(apiKey) {
+        this.apiKey = apiKey;
+        this.baseUrl = 'https://api.themoviedb.org/3';
+        this.imgUrl = 'https://image.tmdb.org/t/p/w500';
 
-async function chargerTendances(periode) {
-    const reponse = await fetch('https://api.themoviedb.org/3/trending/movie/' + periode + '?api_key=' + API_KEY + '&language=fr-FR');
-    const donnees = await reponse.json();
-    const grille = document.querySelector('#tendances .movie-grid');
-    grille.innerHTML = '';
+        this.init();
+    }
 
-    const films = donnees.results.slice(0, 4);
+    init() {
+        this.chargerSection('trending/movie/day', '#tendances .movie-grid');
+        this.chargerSection('movie/popular', '#films .movie-grid');
+        this.chargerSection('tv/popular', '#series .movie-grid');
 
-    films.forEach(film => {
-        const article = document.createElement('article');
-        article.classList.add('movie-card');
+        this.ecouterFiltres();
+    }
 
-        const image = 'https://image.tmdb.org/t/p/w500' + film.poster_path;
-        const note = Math.round(film.vote_average * 10);
-        const date = new Date(film.release_date).toLocaleDateString('fr-FR');
+    async chargerSection(endpoint, containerSelector) {
+        try {
+            const reponse = await fetch(`${this.baseUrl}/${endpoint}?api_key=${this.apiKey}&language=fr-FR`);
+            const donnees = await reponse.json();
 
-        article.innerHTML = `
-            <div class="poster-placeholder" style="background-image: url('${image}'); background-size: cover; background-position: center;">
-                <div class="rating">${note}%</div>
-            </div>
-            <h3>${film.title}</h3>
-            <p class="date">${date}</p>
-        `;
-        grille.appendChild(article);
-    });
+            const grille = document.querySelector(containerSelector);
+            grille.innerHTML = '';
+
+            const items = donnees.results.slice(0, 4);
+
+            items.forEach(item => {
+                const titre = item.title || item.name;
+                const dateBrute = item.release_date || item.first_air_date;
+                const date = dateBrute ? new Date(dateBrute).toLocaleDateString('fr-FR') : "Date inconnue";
+
+                const image = item.poster_path
+                    ? this.imgUrl + item.poster_path
+                    : './assets/img/image_de_remplacement.png';
+
+                const note = Math.round(item.vote_average * 10);
+
+                const article = document.createElement('article');
+                article.classList.add('movie-card');
+                article.innerHTML = `
+                <div class="poster-placeholder" style="background-image: url('${image}'); background-size: cover; background-position: center;">
+                    <div class="rating">${note}%</div>
+                </div>
+                <h3>${titre}</h3>
+                <p class="date">${date}</p>
+            `;
+                grille.appendChild(article);
+            });
+        } catch (erreur) {
+            console.error(erreur);
+        }
+    }
+
+    ecouterFiltres() {
+        this.assignerFiltre('#tendances', (index) => index === 0 ? 'trending/movie/day' : 'trending/movie/week');
+        this.assignerFiltre('#films', (index) => index === 0 ? 'movie/popular' : 'movie/top_rated');
+        this.assignerFiltre('#series', (index) => index === 0 ? 'tv/popular' : 'tv/top_rated');
+    }
+
+    assignerFiltre(sectionId, endpointBuilder) {
+        const boutons = document.querySelectorAll(`${sectionId} .filter-btn`);
+        boutons.forEach((bouton, index) => {
+            bouton.addEventListener('click', () => {
+                document.querySelector(`${sectionId} .filter-btn.active`).classList.remove('active');
+                bouton.classList.add('active');
+
+                const nouvelEndpoint = endpointBuilder(index);
+                this.chargerSection(nouvelEndpoint, `${sectionId} .movie-grid`);
+            });
+        });
+    }
 }
 
-const boutonAujourdhui = document.querySelectorAll('#tendances .filter-btn')[0];
-const boutonSemaine = document.querySelectorAll('#tendances .filter-btn')[1];
-
-boutonAujourdhui.addEventListener('click', () => {
-    boutonAujourdhui.classList.add('active');
-    boutonSemaine.classList.remove('active');
-    chargerTendances('day');
-});
-
-boutonSemaine.addEventListener('click', () => {
-    boutonSemaine.classList.add('active');
-    boutonAujourdhui.classList.remove('active');
-    chargerTendances('week');
-});
-
-
-async function chargerFilms(critere) {
-    const reponse = await fetch('https://api.themoviedb.org/3/movie/' + critere + '?api_key=' + API_KEY + '&language=fr-FR');
-    const donnees = await reponse.json();
-    const grille = document.querySelector('#films .movie-grid');
-    grille.innerHTML = '';
-
-    const films = donnees.results.slice(0, 4);
-
-    films.forEach(film => {
-        const article = document.createElement('article');
-        article.classList.add('movie-card');
-
-        const image = 'https://image.tmdb.org/t/p/w500' + film.poster_path;
-        const note = Math.round(film.vote_average * 10);
-        const date = new Date(film.release_date).toLocaleDateString('fr-FR');
-
-        article.innerHTML = `
-            <div class="poster-placeholder" style="background-image: url('${image}'); background-size: cover; background-position: center;">
-                <div class="rating">${note}%</div>
-            </div>
-            <h3>${film.title}</h3>
-            <p class="date">${date}</p>
-        `;
-        grille.appendChild(article);
-    });
-}
-
-const boutonFilmsPopulaires = document.querySelectorAll('#films .filter-btn')[0];
-const boutonFilmsMieuxNotes = document.querySelectorAll('#films .filter-btn')[1];
-
-boutonFilmsPopulaires.addEventListener('click', () => {
-    boutonFilmsPopulaires.classList.add('active');
-    boutonFilmsMieuxNotes.classList.remove('active');
-    chargerFilms('popular');
-});
-
-boutonFilmsMieuxNotes.addEventListener('click', () => {
-    boutonFilmsMieuxNotes.classList.add('active');
-    boutonFilmsPopulaires.classList.remove('active');
-    chargerFilms('top_rated');
-});
-
-
-async function chargerSeries(critere) {
-    const reponse = await fetch('https://api.themoviedb.org/3/tv/' + critere + '?api_key=' + API_KEY + '&language=fr-FR');
-    const donnees = await reponse.json();
-    const grille = document.querySelector('#series .movie-grid');
-    grille.innerHTML = '';
-
-    const series = donnees.results.slice(0, 4);
-
-    series.forEach(serie => {
-        const article = document.createElement('article');
-        article.classList.add('movie-card');
-
-        const image = 'https://image.tmdb.org/t/p/w500' + serie.poster_path;
-        const note = Math.round(serie.vote_average * 10);
-        const date = new Date(serie.first_air_date).toLocaleDateString('fr-FR');
-
-        article.innerHTML = `
-            <div class="poster-placeholder" style="background-image: url('${image}'); background-size: cover; background-position: center;">
-                <div class="rating">${note}%</div>
-            </div>
-            <h3>${serie.name}</h3>
-            <p class="date">${date}</p>
-        `;
-        grille.appendChild(article);
-    });
-}
-
-const boutonSeriesPopulaires = document.querySelectorAll('#series .filter-btn')[0];
-const boutonSeriesMieuxNotees = document.querySelectorAll('#series .filter-btn')[1];
-
-boutonSeriesPopulaires.addEventListener('click', () => {
-    boutonSeriesPopulaires.classList.add('active');
-    boutonSeriesMieuxNotees.classList.remove('active');
-    chargerSeries('popular');
-});
-
-boutonSeriesMieuxNotees.addEventListener('click', () => {
-    boutonSeriesMieuxNotees.classList.add('active');
-    boutonSeriesPopulaires.classList.remove('active');
-    chargerSeries('top_rated');
-});
-
-
-chargerTendances('day');
-chargerFilms('popular');
-chargerSeries('popular');
+const monApp = new MovieApp('72c35ea3313374128a26f3528c1b14ec');

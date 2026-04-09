@@ -163,6 +163,7 @@ header {
         gap: 30px;
 
         .movie-card {
+            cursor: pointer;
 
             .poster-placeholder {
                 background-color: #E7E7E7;
@@ -170,6 +171,12 @@ header {
                 aspect-ratio: 2 / 3;
                 position: relative;
                 margin-bottom: 25px;
+
+                transition: box-shadow 0.3s ease-in-out;
+
+                &:hover {
+                    box-shadow: 10px 10px 15px rgba(0, 0, 0, 0.6);
+                }
 
                 .rating {
                     position: absolute;
