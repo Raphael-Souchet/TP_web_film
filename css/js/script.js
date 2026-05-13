@@ -4,9 +4,9 @@ class TMDBApi {
         this.baseUrl = 'https://api.themoviedb.org/3';
     }
 
-    async fetchEndpoint(endpoint) {
+    async fetchEndpoint(endpoint, extraParams = "") {
         try {
-            const reponse = await fetch(`${this.baseUrl}/${endpoint}?api_key=${this.apiKey}&language=fr-FR`);
+            const reponse = await fetch(`${this.baseUrl}/${endpoint}?api_key=${this.apiKey}&language=fr-FR${extraParams}`);
             if (!reponse.ok) throw new Error(`Erreur API: ${reponse.status}`);
             return await reponse.json();
         } catch (erreur) {
@@ -29,12 +29,13 @@ class UI {
         return new Date(dateString).toLocaleDateString('fr-FR', options);
     }
 
-    afficherCartes(donneesItems, containerSelector) {
+    afficherCartes(donneesItems, containerSelector, limite = 4) {
         const grille = document.querySelector(containerSelector);
         if (!grille) return;
 
         grille.innerHTML = '';
-        const items = donneesItems.slice(0, 4);
+
+        const items = limite === 0 ? donneesItems : donneesItems.slice(0, limite);
 
         items.forEach(item => {
             const titre = item.title || item.name;
@@ -144,12 +145,48 @@ class MovieApp {
         }
     }
 
-    initPageAccueil() {
-        this.chargerSection('trending/movie/day', '#tendances .movie-grid');
-        this.chargerSection('movie/popular', '#films .movie-grid');
-        this.chargerSection('tv/popular', '#series .movie-grid');
-        this.ecouterFiltres();
+    async initPageAccueil() {
         this.ecouterRecherche();
+
+        const params = new URLSearchParams(window.location.search);
+        const searchQuery = params.get('search');
+
+        if (searchQuery) {
+            document.getElementById('tendances').style.display = 'none';
+            document.getElementById('films').style.display = 'none';
+            document.getElementById('series').style.display = 'none';
+
+            const main = document.querySelector('main');
+            const resultSection = document.createElement('section');
+            resultSection.classList.add('movie-section');
+            resultSection.innerHTML = `
+                <div class="section-header">
+                    <h2>Résultats pour "${searchQuery}"</h2>
+                </div>
+                <div class="movie-grid" id="search-results"></div>
+            `;
+            main.appendChild(resultSection);
+
+            const donnees = await this.api.fetchEndpoint('search/multi', `&query=${encodeURIComponent(searchQuery)}`);
+
+            if (donnees && donnees.results) {
+                const resultatsExacts = donnees.results.filter(item => {
+                    const titre = item.title || item.name;
+                    return titre && titre.toLowerCase() === searchQuery.toLowerCase();
+                });
+
+                if (resultatsExacts.length > 0) {
+                    this.ui.afficherCartes(resultatsExacts, '#search-results', 0);
+                } else {
+                    document.getElementById('search-results').innerHTML = `<p style="grid-column: 1 / -1; font-size: 18px;">Aucun titre correspondant exactement à "<strong>${searchQuery}</strong>" n'a été trouvé.</p>`;
+                }
+            }
+        } else {
+            this.chargerSection('trending/movie/day', '#tendances .movie-grid');
+            this.chargerSection('movie/popular', '#films .movie-grid');
+            this.chargerSection('tv/popular', '#series .movie-grid');
+            this.ecouterFiltres();
+        }
     }
 
     async initPageDetails() {
