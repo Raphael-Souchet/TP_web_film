@@ -19,11 +19,14 @@ class TMDBApi {
 class UI {
     constructor() {
         this.imgUrl = 'https://image.tmdb.org/t/p/w500';
+        this.originalImgUrl = 'https://image.tmdb.org/t/p/original';
         this.defaultImage = './assets/img/image_de_remplacement.png';
     }
 
     formaterDate(dateString) {
-        return dateString ? new Date(dateString).toLocaleDateString('fr-FR') : "Date inconnue";
+        if (!dateString) return "Date inconnue";
+        const options = { day: 'numeric', month: 'short', year: 'numeric' };
+        return new Date(dateString).toLocaleDateString('fr-FR', options);
     }
 
     afficherCartes(donneesItems, containerSelector) {
@@ -31,7 +34,6 @@ class UI {
         if (!grille) return;
 
         grille.innerHTML = '';
-
         const items = donneesItems.slice(0, 4);
 
         items.forEach(item => {
@@ -55,23 +57,121 @@ class UI {
             grille.appendChild(article);
         });
     }
+
+    afficherDetails(details, credits, type) {
+        const container = document.getElementById('movie-content');
+        if (!container) return;
+
+        const titre = details.title || details.name;
+        const annee = (details.release_date || details.first_air_date || "N/A").substring(0, 4);
+        const dateComplete = this.formaterDate(details.release_date || details.first_air_date);
+        const note = Math.round(details.vote_average * 10);
+        const synopsis = details.overview || "Aucun synopsis disponible pour ce titre.";
+
+        const poster = details.poster_path ? this.imgUrl + details.poster_path : this.defaultImage;
+        const backdrop = details.backdrop_path ? this.originalImgUrl + details.backdrop_path : '';
+
+        const genres = details.genres ? details.genres.map(g => g.name).join(', ') : "Genres inconnus";
+
+        let dureeTexte = "";
+        if (type === 'movie' && details.runtime) {
+            const h = Math.floor(details.runtime / 60);
+            const m = details.runtime % 60;
+            dureeTexte = ` - ${h}h ${m}m`;
+        } else if (type === 'tv' && details.episode_run_time && details.episode_run_time.length > 0) {
+            dureeTexte = ` - ${details.episode_run_time[0]}m`;
+        }
+
+        let castingHTML = '<p>Aucun casting disponible.</p>';
+        if (credits && credits.cast && credits.cast.length > 0) {
+            const topCast = credits.cast.slice(0, 8);
+            castingHTML = topCast.map(acteur => {
+                const photo = acteur.profile_path ? this.imgUrl + acteur.profile_path : this.defaultImage;
+                return `
+                <div class="cast-card">
+                    <img src="${photo}" alt="${acteur.name}">
+                    <div class="cast-info">
+                        <strong>${acteur.name}</strong>
+                        <span>${acteur.character}</span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        container.innerHTML = `
+            <div class="movie-banner" style="background-image: url('${backdrop}');">
+                <div class="banner-content">
+                    <img src="${poster}" alt="${titre}" class="detail-poster">
+                    <div class="detail-info">
+                        <div class="title-row">
+                            <div class="rating-circle">${note}%</div>
+                            <h1>${titre} <span>(${annee})</span></h1>
+                        </div>
+                        <p class="meta">${dateComplete} - ${genres}${dureeTexte}</p>
+                        
+                        <h2>Synopsis</h2>
+                        <p class="overview">${synopsis}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="casting-section">
+                <h2>Casting</h2>
+                <div class="cast-grid">
+                    ${castingHTML}
+                </div>
+            </div>
+        `;
+
+        container.style.minHeight = "auto";
+        container.style.display = "block";
+    }
 }
 
 class MovieApp {
     constructor(apiKey) {
         this.api = new TMDBApi(apiKey);
         this.ui = new UI();
-
         this.init();
     }
 
     init() {
+        if (document.querySelector('.search-banner')) {
+            this.initPageAccueil();
+        } else if (document.getElementById('movie-content')) {
+            this.initPageDetails();
+        }
+    }
+
+    initPageAccueil() {
         this.chargerSection('trending/movie/day', '#tendances .movie-grid');
         this.chargerSection('movie/popular', '#films .movie-grid');
         this.chargerSection('tv/popular', '#series .movie-grid');
-
         this.ecouterFiltres();
         this.ecouterRecherche();
+    }
+
+    async initPageDetails() {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        const type = params.get('type');
+
+        if (!id || !type) {
+            document.getElementById('movie-content').innerHTML = "<h2>Erreur : Aucun film sélectionné.</h2>";
+            return;
+        }
+
+        const [details, credits] = await Promise.all([
+            this.api.fetchEndpoint(`${type}/${id}`),
+            this.api.fetchEndpoint(`${type}/${id}/credits`)
+        ]);
+
+        if (details) {
+            this.ui.afficherDetails(details, credits, type);
+        } else {
+            document.getElementById('movie-content').innerHTML = "<h2>Erreur lors du chargement des détails.</h2>";
+        }
     }
 
     async chargerSection(endpoint, containerSelector) {
